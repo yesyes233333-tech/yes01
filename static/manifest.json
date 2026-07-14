@@ -1,6 +1,6 @@
 {
-  "name": "交流翻譯",
-  "short_name": "交流翻譯",
+  "name": "交流 ＊即時通",
+  "short_name": "交流 ＊即時通",
   "description": "雙向即時語音翻譯 — 單人與面對面模式，支援 Gemini 與 OpenAI 相容供應商",
   "start_url": "/",
   "display": "standalone",
