@@ -1,0 +1,25 @@
+# 金鑰檔絕不提交 (改用部署平台的環境變數)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 記錄與暫存
+*.log
+_uitest.py
+shot_*.png
+
+# 前端相依
+node_modules/
+.DS_Store
+
+# Netlify 本機狀態（含 site link，不進版控）
+.netlify/
+
+# 參考截圖不公開
+參考/
+
+# 使用卡含金鑰，不上傳
+*.pdf

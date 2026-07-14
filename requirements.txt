@@ -1,0 +1,6 @@
+google-genai
+flask
+flask-socketio
+simple-websocket
+python-dotenv
+requests

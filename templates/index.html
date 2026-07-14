@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2a1a4a">
+    <title>亮言 · 即時翻譯</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- OpenCC：手機語音辨識常把國語轉成簡體，載入後把辨識結果轉回繁體 -->
+    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
+
+<style>
+/* ===== Password Gate ===== */
+.password-gate {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.password-gate.hidden {
+    opacity: 0;
+    transform: scale(1.05);
+    pointer-events: none;
+}
+
+.gate-box {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    padding: 50px 45px;
+    width: 90%;
+    max-width: 440px;
+    text-align: center;
+    animation: gateIn 0.8s ease;
+}
+
+@keyframes gateIn {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.gate-logo {
+    font-size: 64px;
+    margin-bottom: 10px;
+    animation: gateFloat 3s ease-in-out infinite;
+}
+
+@keyframes gateFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+}
+
+.gate-title {
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.gate-subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.gate-disclaimer {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 24px;
+}
+
+.gate-input-wrap {
+    position: relative;
+    margin-bottom: 18px;
+}
+
+.gate-input {
+    width: 100%;
+    padding: 14px 50px 14px 20px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 16px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.gate-input:focus {
+    border-color: #f5c451;
+    box-shadow: 0 0 0 3px #f5c45133;
+}
+
+.gate-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.gate-toggle-pw {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px;
+}
+
+.gate-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, #f5c451, #f7d98a);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px #f5c45140;
+}
+
+.gate-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px #f5c45150;
+}
+
+.gate-error {
+    color: #ff6b6b;
+    font-size: 14px;
+    margin-top: 12px;
+    min-height: 20px;
+}
+
+.gate-admin-toggle {
+    margin-top: 24px;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.3s ease;
+    user-select: none;
+}
+
+.gate-admin-toggle:hover {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.admin-panel {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: left;
+}
+
+.admin-panel.show { display: block; }
+
+.admin-panel h4 {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.admin-pw-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 120px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.admin-pw-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+}
+
+.admin-pw-list li:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.admin-pw-list li button {
+    background: rgba(255, 80, 80, 0.3);
+    border: none;
+    color: #ff6b6b;
+    padding: 2px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.admin-add-row {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-add-row input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+}
+
+.admin-add-row button {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(135deg, #f5c451, #f7d98a);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.admin-msg {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    margin-top: 8px;
+    min-height: 16px;
+}
+
+</style>
+</head>
+
+<body>
+<!-- Password Gate (SHA-256) -->
+<div class="password-gate" id="passwordGate">
+    <div class="gate-box">
+        <div class="gate-logo">🌐</div>
+        <div class="gate-title">亮言 · 即時翻譯</div>
+        <div class="gate-subtitle">請輸入密碼以進入使用</div>
+        <p class="gate-disclaimer">本機制僅為閱讀阻擋，非安全保護措施</p>
+
+        <div class="gate-input-wrap">
+            <input type="password" class="gate-input" id="pwInput" placeholder="請輸入密碼..." autocomplete="off">
+            <button class="gate-toggle-pw" id="togglePw" title="顯示/隱藏密碼">&#128065;</button>
+        </div>
+        <button class="gate-btn" id="pwSubmit">進入</button>
+        <div class="gate-error" id="pwError"></div>
+
+        <div class="gate-admin-toggle" id="adminToggle">&#128274; 管理員</div>
+        <div class="admin-panel" id="adminPanel">
+            <h4>密碼管理（需管理員密碼）</h4>
+            <div class="gate-input-wrap" style="margin-bottom:12px;">
+                <input type="password" class="gate-input" id="adminPwInput" placeholder="管理員密碼..." style="font-size:14px;padding:10px 16px;">
+            </div>
+            <div id="adminContent" style="display:none;">
+                <ul class="admin-pw-list" id="pwList"></ul>
+                <div class="admin-add-row">
+                    <input type="text" id="newPwInput" placeholder="新增密碼...">
+                    <button id="addPwBtn">新增</button>
+                </div>
+                <div class="admin-msg" id="adminMsg"></div>
+                <button class="gate-btn" id="enterSiteBtn" style="margin-top:12px;font-size:14px;padding:10px;">進入網站</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <div class="app">
+        <!-- 頂部列 -->
+        <header class="topbar">
+            <div class="brand">
+                <span class="dot" id="statusDot" title="連線狀態"></span>
+                <h1>亮言 · 即時翻譯</h1>
+            </div>
+            <div class="top-actions">
+                <button class="icon-btn" id="modeBtn" title="切換模式">👤 單人</button>
+                <button class="icon-btn" id="historyBtn" title="歷史紀錄">🕐</button>
+                <button class="icon-btn" id="settingsBtn" title="設定">⚙️</button>
+            </div>
+        </header>
+
+        <!-- ===== 單人模式 ===== -->
+        <section id="singleView" class="view">
+            <div class="lang-bar">
+                <select class="lang-select" id="s_langA"></select>
+                <button class="swap-btn" id="s_swap" title="對調語言">⇄</button>
+                <select class="lang-select" id="s_langB"></select>
+            </div>
+
+            <div class="result-box" id="s_result">
+                <span class="placeholder">翻譯結果會顯示在這裡…</span>
+            </div>
+
+            <div class="visualizer" id="s_viz">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+
+            <div class="engine-row">
+                <label class="engine-pill">
+                    <input type="radio" name="engine" value="stt" checked> 逐句 (STT→翻譯→朗讀 · 支援所有供應商)
+                </label>
+                <label class="engine-pill">
+                    <input type="radio" name="engine" value="live"> 即時 (Gemini Live · 低延遲)
+                </label>
+            </div>
+
+            <button id="s_mic" class="mic-btn"><span class="mic-ico">🎤</span><span class="mic-label">點一下開始說話</span></button>
+
+            <div class="text-row">
+                <textarea id="s_text" maxlength="200" placeholder="或直接輸入要翻譯的文字…"></textarea>
+                <div class="text-meta">
+                    <span id="s_count">0/200</span>
+                    <button id="s_send" class="send-btn">翻譯 ➤</button>
+                </div>
+            </div>
+
+            <!-- 拍照 / 上傳檔案：摘要 + 翻譯 -->
+            <div class="tool-row">
+                <button id="s_camera" class="tool-btn">📷 拍照翻譯</button>
+                <button id="s_file" class="tool-btn">📎 上傳檔案</button>
+            </div>
+            <!-- 旅遊小工具 -->
+            <div class="tool-row">
+                <button id="s_weather" class="tool-btn">🌤️ 天氣</button>
+                <button id="s_currency" class="tool-btn">💱 匯率</button>
+                <button id="s_ask" class="tool-btn">🧭 助手</button>
+            </div>
+        </section>
+
+        <!-- 隱藏的檔案輸入 -->
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+        <input type="file" id="fileInput" accept="image/*,application/pdf,text/plain,.pdf,.txt,.md,.csv" hidden>
+
+        <!-- ===== 面對面模式 ===== -->
+        <section id="faceView" class="view hidden">
+            <!-- 上半：翻轉 180°，給對面的人看 -->
+            <div class="face-panel top" id="face_top">
+                <div class="face-inner">
+                    <select class="lang-select" id="f_langTop"></select>
+                    <div class="result-box face-result" id="f_resultTop">
+                        <span class="placeholder">對方語言的翻譯會顯示在這裡…</span>
+                    </div>
+                    <button class="mic-btn face-mic" id="f_micTop"><span class="mic-ico">🎤</span> 說話</button>
+                </div>
+            </div>
+
+            <div class="face-divider"><span>面對面 · 手機平放桌上</span></div>
+
+            <!-- 下半：正常方向，給你看 -->
+            <div class="face-panel bottom" id="face_bottom">
+                <div class="face-inner">
+                    <select class="lang-select" id="f_langBottom"></select>
+                    <div class="result-box face-result" id="f_resultBottom">
+                        <span class="placeholder">你的語言的翻譯會顯示在這裡…</span>
+                    </div>
+                    <button class="mic-btn face-mic" id="f_micBottom"><span class="mic-ico">🎤</span> 說話</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ===== 設定 Modal ===== -->
+    <div class="modal hidden" id="settingsModal">
+        <div class="modal-card">
+            <h2>設定</h2>
+
+            <h3>翻譯後端 (雲端 API)</h3>
+            <p class="hint">選 Gemini 用內建金鑰；選 OpenAI 相容可接 OpenAI / Groq / DeepSeek / OpenRouter…任何相容服務。拍照／檔案翻譯也會跟隨此設定；但 PDF 僅 Gemini 能讀，選其他供應商時 PDF 會自動改用 Gemini。</p>
+            <label>供應商
+                <select id="cfg_provider">
+                    <option value="gemini">Gemini (Google)</option>
+                    <option value="openai">OpenAI 相容 (自訂)</option>
+                </select>
+            </label>
+            <div id="openaiFields">
+                <label>相容 OpenAI 格式的網址
+                    <input type="text" id="cfg_baseurl" placeholder="https://api.openai.com/v1">
+                </label>
+                <label>API 金鑰 (API Key)
+                    <input type="password" id="cfg_apikey" placeholder="sk-...">
+                </label>
+            </div>
+            <label>模型名稱 (Model)
+                <input type="text" id="cfg_model" placeholder="gemini-3.5-flash 或 gpt-5.5">
+            </label>
+
+            <h3>🔑 API 金鑰（集中管理）</h3>
+            <p class="hint">第三方服務的金鑰統一放這裡。留空的用免金鑰來源或伺服器內建。</p>
+            <label>Gemini 金鑰（選填，留空用伺服器內建）
+                <input type="password" id="cfg_geminikey" placeholder="AIza...（放伺服器較安全，這裡是選填覆蓋）">
+            </label>
+            <label>Tavily 金鑰（旅遊問答上網查資料）
+                <input type="password" id="cfg_tavilykey" placeholder="tvly-...">
+            </label>
+            <label>OpenWeatherMap 金鑰（選填；天氣預設免金鑰用 Open-Meteo）
+                <input type="password" id="cfg_owmkey" placeholder="留空即可，免金鑰照樣查天氣">
+            </label>
+
+            <h3>🎨 背景風格</h3>
+            <p class="hint">挑一個你喜歡的配色，選了立刻預覽，儲存後會記住。</p>
+            <label>主題
+                <select id="cfg_theme">
+                    <option value="purple">紫金（預設）</option>
+                    <option value="ocean">海洋藍</option>
+                    <option value="forest">森林綠</option>
+                    <option value="sunset">夕陽橙</option>
+                    <option value="rose">玫瑰粉</option>
+                    <option value="mono">暗夜黑（省電）</option>
+                    <option value="light">日光淺色</option>
+                </select>
+            </label>
+
+            <h3>語音朗讀 (TTS)</h3>
+            <label>語速 <input type="range" id="cfg_rate" min="0.5" max="1.5" step="0.1" value="1"></label>
+            <label class="check"><input type="checkbox" id="cfg_autospeak" checked> 翻譯完成後自動朗讀</label>
+
+            <div class="modal-actions">
+                <button class="ghost" id="cfg_cancel">取消</button>
+                <button class="primary" id="cfg_save">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 拍照 / 檔案：摘要+翻譯 Modal ===== -->
+    <div class="modal hidden" id="visionModal">
+        <div class="modal-card">
+            <h2 id="visionTitle">📷 拍照翻譯</h2>
+            <label>翻譯成
+                <select id="vision_target"></select>
+            </label>
+            <div id="visionPreview" class="vision-preview hidden"></div>
+            <div id="visionStatus" class="vision-status hint"></div>
+            <div id="visionResult" class="vision-result hidden">
+                <div class="vision-section">
+                    <h3>📌 摘要</h3>
+                    <div id="visionSummary" class="vision-text"></div>
+                </div>
+                <div class="vision-section">
+                    <h3>🌐 翻譯</h3>
+                    <div id="visionTranslation" class="vision-text"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="ghost" id="vision_close">關閉</button>
+                <button class="primary" id="vision_speak">🔊 朗讀</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 天氣 Modal ===== -->
+    <div class="modal hidden" id="weatherModal">
+        <div class="modal-card">
+            <h2>🌤️ 天氣查詢</h2>
+            <p class="hint">免費、免金鑰（Open-Meteo）。輸入地點或用目前位置。</p>
+            <div class="wx-search">
+                <input type="text" id="wx_place" placeholder="例如：那霸、東京、台北…">
+                <button class="primary" id="wx_go">查詢</button>
+            </div>
+            <button class="ghost wx-geo" id="wx_geo">📍 用目前位置</button>
+            <div id="wx_result" class="wx-result hidden"></div>
+            <div id="wx_status" class="hint"></div>
+            <div class="modal-actions">
+                <button class="ghost" id="wx_close">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 旅遊助手 Modal ===== -->
+    <div class="modal hidden" id="askModal">
+        <div class="modal-card">
+            <h2>🧭 旅遊助手</h2>
+            <p class="hint">打一句話問任何旅遊問題。填了 Tavily 金鑰會先上網查最新，否則用 AI 既有知識回答。</p>
+            <textarea id="ask_q" rows="3" placeholder="例如：沖繩 12 月適合玩水嗎？那霸機場到國際通怎麼去？"></textarea>
+            <div class="modal-actions" style="margin-top:10px;">
+                <button class="primary" id="ask_go">送出</button>
+            </div>
+            <div id="ask_status" class="hint"></div>
+            <div id="ask_answer" class="vision-text hidden" style="margin-top:10px;"></div>
+            <div id="ask_sources" class="ask-sources"></div>
+            <div class="modal-actions">
+                <button class="ghost" id="ask_close">關閉</button>
+                <button class="primary" id="ask_speak">🔊 朗讀</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 匯率換算 Modal ===== -->
+    <div class="modal hidden" id="currencyModal">
+        <div class="modal-card">
+            <h2>💱 匯率換算</h2>
+            <p class="hint">即時匯率（歐洲央行／ER-API，免費）。點金額或幣別會自動換算。</p>
+            <label>金額
+                <input type="number" id="cur_amount" inputmode="decimal" value="1" min="0" step="any">
+            </label>
+            <div class="cur-row">
+                <select class="lang-select" id="cur_from"></select>
+                <button class="swap-btn" id="cur_swap" title="對調幣別">⇄</button>
+                <select class="lang-select" id="cur_to"></select>
+            </div>
+            <div class="cur-result" id="cur_result">—</div>
+            <div class="cur-rate hint" id="cur_rate"></div>
+            <div class="modal-actions">
+                <button class="ghost" id="cur_close">關閉</button>
+                <button class="primary" id="cur_convert">換算</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 歷史 Modal ===== -->
+    <div class="modal hidden" id="historyModal">
+        <div class="modal-card">
+            <h2>歷史紀錄</h2>
+            <div id="historyList" class="history-list"></div>
+            <div class="modal-actions">
+                <button class="ghost" id="hist_clear">清空</button>
+                <button class="primary" id="hist_close">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+<script>
+// === Password Gate (SHA-256, 閱讀阻擋用途，非安全保護) ===
+(function () {
+  'use strict';
+  var ADMIN_HASH       = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
+  // 內建（寫死於程式碼）的使用者密碼雜湊清單；新增請改原始碼並重新部署
+  var BUILTIN_HASHES   = ["03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"];
+  var HASH_STORAGE     = 'liang_translate_pw';
+  var AUTH_KEY         = 'liang_translate_authed';
+
+  var gate = document.getElementById('passwordGate');
+  if (!gate) return;
+
+  if (sessionStorage.getItem(AUTH_KEY) === '1') {
+    gate.classList.add('hidden');
+    setTimeout(function () { gate.style.display = 'none'; }, 600);
+    return;
+  }
+
+  var pwInput      = document.getElementById('pwInput');
+  var pwSubmit     = document.getElementById('pwSubmit');
+  var pwError      = document.getElementById('pwError');
+  var togglePw     = document.getElementById('togglePw');
+  var adminToggle  = document.getElementById('adminToggle');
+  var adminPanel   = document.getElementById('adminPanel');
+  var adminPwInput = document.getElementById('adminPwInput');
+  var adminContent = document.getElementById('adminContent');
+  var pwList       = document.getElementById('pwList');
+  var newPwInput   = document.getElementById('newPwInput');
+  var addPwBtn     = document.getElementById('addPwBtn');
+  var enterSiteBtn = document.getElementById('enterSiteBtn');
+  var adminMsg     = document.getElementById('adminMsg');
+
+  function sha256(str) {
+    var encoder = new TextEncoder();
+    return crypto.subtle.digest('SHA-256', encoder.encode(str)).then(function (buf) {
+      return Array.from(new Uint8Array(buf)).map(function (b) {
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  }
+
+  // 只回傳「管理員另外加在 localStorage 的密碼」，內建密碼一律走 BUILTIN_HASHES
+  function getExtraHashes() {
+    try {
+      var raw = localStorage.getItem(HASH_STORAGE);
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      // 過濾掉舊格式（明文或不是 64 字元 hex）與已在內建清單中的雜湊
+      return parsed.filter(function (h) {
+        return typeof h === 'string' && h.length === 64 && BUILTIN_HASHES.indexOf(h) === -1;
+      });
+    } catch (e) { return []; }
+  }
+
+  function saveExtraHashes(list) {
+    localStorage.setItem(HASH_STORAGE, JSON.stringify(list));
+  }
+
+  function enterSite() {
+    sessionStorage.setItem(AUTH_KEY, '1');
+    gate.classList.add('hidden');
+    setTimeout(function () { gate.style.display = 'none'; }, 600);
+  }
+
+  if (togglePw) {
+    togglePw.addEventListener('click', function () {
+      pwInput.type = pwInput.type === 'password' ? 'text' : 'password';
+    });
+  }
+
+  function checkPassword() {
+    var val = pwInput.value.trim();
+    if (!val) {
+      pwError.textContent = '請輸入密碼';
+      return;
+    }
+    sha256(val).then(function (hash) {
+      var extras = getExtraHashes();
+      // 進入密碼優先：任何有效密碼（含管理密碼）直接進入，管理面板另由「管理員」開啟
+      if (BUILTIN_HASHES.indexOf(hash) !== -1 || extras.indexOf(hash) !== -1 || hash === ADMIN_HASH) {
+        enterSite();
+      } else {
+        pwError.textContent = '密碼錯誤，請重新輸入';
+        pwInput.value = '';
+        pwInput.focus();
+      }
+    });
+  }
+
+  pwSubmit.addEventListener('click', checkPassword);
+  pwInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') checkPassword();
+  });
+
+  if (adminToggle) {
+    adminToggle.addEventListener('click', function () {
+      adminPanel.classList.toggle('show');
+    });
+  }
+
+  if (adminPwInput) {
+    var debounce = null;
+    adminPwInput.addEventListener('input', function () {
+      clearTimeout(debounce);
+      debounce = setTimeout(function () {
+        sha256(adminPwInput.value).then(function (hash) {
+          if (hash === ADMIN_HASH) {
+            if (adminContent) adminContent.style.display = 'block';
+            renderHashList();
+          } else {
+            if (adminContent) adminContent.style.display = 'none';
+          }
+        });
+      }, 200);
+    });
+  }
+
+  function renderHashList() {
+    if (!pwList) return;
+    var extras = getExtraHashes();
+    pwList.innerHTML = '';
+
+    // 內建密碼（不可刪）
+    BUILTIN_HASHES.forEach(function (h) {
+      var li = document.createElement('li');
+      var span = document.createElement('span');
+      span.textContent = h.substring(0, 8) + '...' + h.substring(60) + '（內建）';
+      span.title = h + '（內建，需改原始碼才能刪除）';
+      li.appendChild(span);
+      pwList.appendChild(li);
+    });
+
+    // 管理員額外加的（可刪）
+    extras.forEach(function (h, i) {
+      var li = document.createElement('li');
+      var span = document.createElement('span');
+      span.textContent = h.substring(0, 8) + '...' + h.substring(60);
+      span.title = h;
+      li.appendChild(span);
+      var btn = document.createElement('button');
+      btn.textContent = '刪除';
+      btn.addEventListener('click', function () {
+        var current = getExtraHashes();
+        if (i < 0 || i >= current.length) return;
+        current.splice(i, 1);
+        saveExtraHashes(current);
+        renderHashList();
+        if (adminMsg) {
+          adminMsg.textContent = '已刪除';
+          setTimeout(function () { adminMsg.textContent = ''; }, 2000);
+        }
+      });
+      li.appendChild(btn);
+      pwList.appendChild(li);
+    });
+  }
+
+  function addPassword() {
+    var val = newPwInput.value.trim();
+    if (!val) { if (adminMsg) adminMsg.textContent = '請輸入密碼'; return; }
+    sha256(val).then(function (hash) {
+      if (hash === ADMIN_HASH) { if (adminMsg) adminMsg.textContent = '不可新增管理員密碼'; return; }
+      if (BUILTIN_HASHES.indexOf(hash) !== -1) { if (adminMsg) adminMsg.textContent = '此密碼已是內建密碼'; return; }
+      var extras = getExtraHashes();
+      if (extras.indexOf(hash) !== -1) { if (adminMsg) adminMsg.textContent = '此密碼已存在'; return; }
+      extras.push(hash);
+      saveExtraHashes(extras);
+      newPwInput.value = '';
+      if (adminMsg) {
+        adminMsg.textContent = '⚠ 已加入本機 localStorage（其他裝置無效，要全體生效需改原始碼重部署）';
+        setTimeout(function () { adminMsg.textContent = ''; }, 5000);
+      }
+      renderHashList();
+    });
+  }
+
+  if (addPwBtn) {
+    addPwBtn.addEventListener('click', addPassword);
+  }
+  if (newPwInput) {
+    newPwInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') addPassword();
+    });
+  }
+
+  if (enterSiteBtn) {
+    enterSiteBtn.addEventListener('click', enterSite);
+  }
+})();
+
+</script>
+</body>
+
+</html>
