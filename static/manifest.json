@@ -1,6 +1,6 @@
 {
-  "name": "亮言 · 即時翻譯",
-  "short_name": "亮言翻譯",
+  "name": "交流翻譯",
+  "short_name": "交流翻譯",
   "description": "雙向即時語音翻譯 — 單人與面對面模式，支援 Gemini 與 OpenAI 相容供應商",
   "start_url": "/",
   "display": "standalone",

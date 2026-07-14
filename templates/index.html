@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#2a1a4a">
-    <title>亮言 · 即時翻譯</title>
+    <title>交流翻譯</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -260,7 +260,7 @@
 <div class="password-gate" id="passwordGate">
     <div class="gate-box">
         <div class="gate-logo">🌐</div>
-        <div class="gate-title">亮言 · 即時翻譯</div>
+        <div class="gate-title">交流翻譯</div>
         <div class="gate-subtitle">請輸入密碼以進入使用</div>
         <p class="gate-disclaimer">本機制僅為閱讀阻擋，非安全保護措施</p>
 
@@ -295,7 +295,7 @@
         <header class="topbar">
             <div class="brand">
                 <span class="dot" id="statusDot" title="連線狀態"></span>
-                <h1>亮言 · 即時翻譯</h1>
+                <h1>交流翻譯</h1>
             </div>
             <div class="top-actions">
                 <button class="icon-btn" id="modeBtn" title="切換模式">👤 單人</button>
@@ -552,9 +552,9 @@
 // === Password Gate (SHA-256, 閱讀阻擋用途，非安全保護) ===
 (function () {
   'use strict';
-  var ADMIN_HASH       = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
+  var ADMIN_HASH       = 'd5f0c33021595f4db1659f924edc67658a477aabbabcbb7cc8eaa647cacc329b';
   // 內建（寫死於程式碼）的使用者密碼雜湊清單；新增請改原始碼並重新部署
-  var BUILTIN_HASHES   = ["03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"];
+  var BUILTIN_HASHES   = ["d5f0c33021595f4db1659f924edc67658a477aabbabcbb7cc8eaa647cacc329b"];
   var HASH_STORAGE     = 'liang_translate_pw';
   var AUTH_KEY         = 'liang_translate_authed';
 
